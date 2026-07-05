@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Interceptación
     const interceptToggle = document.getElementById('intercept-toggle');
     const interceptStatusText = document.getElementById('intercept-status-text');
+    const interceptIgnoreStaticToggle = document.getElementById('intercept-ignore-static-toggle');
+    const interceptIgnoreStaticText = document.getElementById('intercept-ignore-static-text');
     const interceptBadge = document.getElementById('intercept-badge');
     const interceptEmpty = document.getElementById('intercept-empty');
     const interceptSplitView = document.getElementById('intercept-split-view');
@@ -49,7 +51,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const repeaterResHeaders = document.getElementById('repeater-res-headers');
     const repeaterResBody = document.getElementById('repeater-res-body');
     const repeaterLoader = document.getElementById('repeater-loader');
-    const repeaterSubtabs = document.querySelectorAll('[data-subtab]');
+    const repeaterSubtabs = document.querySelectorAll('[data-subtab^="rep-"]');
+
+    // Interceptador Estructurado
+    const interceptMethod = document.getElementById('intercept-method');
+    const interceptUrl = document.getElementById('intercept-url');
+    const interceptHeadersList = document.getElementById('intercept-headers-list');
+    const interceptAddHeaderBtn = document.getElementById('intercept-add-header-btn');
+    const interceptBodyTextarea = document.getElementById('intercept-body-textarea');
+    const interceptStructuredPane = document.getElementById('intercept-structured-pane');
+    const interceptRawPane = document.getElementById('intercept-raw-pane');
+    const interceptSubtabs = document.querySelectorAll('[data-subtab^="intercept-"]');
 
     // ==========================================================================
     // SISTEMA DE PESTAÑAS (TABS)
@@ -137,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'init':
                     currentHistory = msg.history;
                     updateInterceptToggleUI(msg.intercept_enabled);
+                    updateIgnoreStaticToggleUI(msg.ignore_static_enabled);
                     renderHistory();
                     if (msg.pending_intercepts) {
                         interceptedRequestsList = msg.pending_intercepts;
@@ -151,6 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 case 'intercept_toggle':
                     updateInterceptToggleUI(msg.enabled);
+                    break;
+
+                case 'ignore_static_toggle':
+                    updateIgnoreStaticToggleUI(msg.enabled);
                     break;
 
                 case 'intercept_request':
@@ -351,6 +368,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    function updateIgnoreStaticToggleUI(enabled) {
+        if (interceptIgnoreStaticToggle) {
+            interceptIgnoreStaticToggle.checked = enabled;
+        }
+        if (interceptIgnoreStaticText) {
+            if (enabled) {
+                interceptIgnoreStaticText.style.color = "var(--success)";
+            } else {
+                interceptIgnoreStaticText.style.color = "var(--text-muted)";
+            }
+        }
+    }
+
+    if (interceptIgnoreStaticToggle) {
+        interceptIgnoreStaticToggle.addEventListener('change', async () => {
+            const enabled = interceptIgnoreStaticToggle.checked;
+            await fetch('/api/intercept/ignore_static', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            });
+        });
+    }
+
     function renderInterceptedRequests() {
         // Actualizar el badge del menú de navegación lateral
         if (interceptedRequestsList.length > 0) {
@@ -409,6 +450,143 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Manejo de subpestañas del editor de interceptación
+    interceptSubtabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+            interceptSubtabs.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            const target = btn.getAttribute('data-subtab');
+            if (target === 'intercept-structured') {
+                // Sincronizar de Raw a Formulario antes de mostrarlo
+                syncRawToForm();
+                interceptStructuredPane.style.display = 'flex';
+                interceptRawPane.style.display = 'none';
+            } else {
+                // Sincronizar de Formulario a Raw antes de mostrarlo
+                syncFormToRaw();
+                interceptStructuredPane.style.display = 'none';
+                interceptRawPane.style.display = 'block';
+            }
+        });
+    });
+
+    // Añadir cabecera vacía en el Formulario
+    interceptAddHeaderBtn.addEventListener('click', () => {
+        addHeaderRow('', '');
+    });
+
+    // Sincronizar Formulario -> Raw
+    function syncFormToRaw() {
+        const method = interceptMethod.value;
+        const url = interceptUrl.value;
+        
+        // Obtener cabeceras
+        const headers = [];
+        interceptHeadersList.querySelectorAll('.intercept-header-row').forEach(row => {
+            const key = row.querySelector('.header-key').value.trim();
+            const val = row.querySelector('.header-value').value.trim();
+            if (key) {
+                headers.push(`${key}: ${val}`);
+            }
+        });
+        
+        const body = interceptBodyTextarea.value;
+        
+        let raw = `${method} ${url} HTTP/1.1\r\n`;
+        if (headers.length > 0) {
+            raw += headers.join('\r\n') + '\r\n';
+        }
+        raw += '\r\n';
+        raw += body;
+        
+        interceptRawTextarea.value = raw;
+    }
+
+    // Sincronizar Raw -> Formulario
+    function syncRawToForm() {
+        const raw = interceptRawTextarea.value;
+        const parsed = parseRawRequest(raw);
+        
+        interceptMethod.value = parsed.method;
+        interceptUrl.value = parsed.url;
+        interceptBodyTextarea.value = parsed.body;
+        
+        // Rellenar cabeceras
+        renderHeadersList(parsed.headers);
+    }
+
+    // Parseador helper de petición raw
+    function parseRawRequest(rawText) {
+        // Normalizar saltos de línea a \n
+        const normalized = rawText.replace(/\r\n/g, '\n');
+        const parts = normalized.split('\n\n');
+        const headersPart = parts[0] || '';
+        const body = parts.slice(1).join('\n\n'); // En caso de que haya más \n\n en el cuerpo
+        
+        const lines = headersPart.split('\n');
+        const firstLine = lines[0] || '';
+        const firstLineParts = firstLine.split(/\s+/);
+        
+        const method = firstLineParts[0] || 'GET';
+        // Conservar el path completo
+        const url = firstLineParts[1] || '';
+        
+        const headers = {};
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            const colonIdx = line.indexOf(':');
+            if (colonIdx !== -1) {
+                const k = line.substring(0, colonIdx).trim();
+                const v = line.substring(colonIdx + 1).trim();
+                headers[k] = v;
+            }
+        }
+        
+        return { method, url, headers, body };
+    }
+
+    function renderHeadersList(headersObj) {
+        interceptHeadersList.innerHTML = '';
+        Object.entries(headersObj).forEach(([key, val]) => {
+            addHeaderRow(key, val);
+        });
+        
+        // Si está vacío, añadir una fila vacía para comodidad
+        if (Object.keys(headersObj).length === 0) {
+            addHeaderRow('', '');
+        }
+    }
+
+    function addHeaderRow(key = '', val = '') {
+        const row = document.createElement('div');
+        row.className = 'intercept-header-row';
+        
+        row.innerHTML = `
+            <input type="text" class="header-key" placeholder="Cabecera" value="${escapeHtml(key)}">
+            <input type="text" class="header-value" placeholder="Valor" value="${escapeHtml(val)}">
+            <button type="button" class="btn-delete-header" title="Eliminar Cabecera">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        `;
+        
+        // Eliminar fila
+        row.querySelector('.btn-delete-header').addEventListener('click', () => {
+            row.remove();
+        });
+        
+        interceptHeadersList.appendChild(row);
+    }
+
+    function escapeHtml(str) {
+        return str
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
     function selectInterceptedRequest(req) {
         currentInterceptedRequest = req;
         interceptEditorEmpty.style.display = 'none';
@@ -418,22 +596,53 @@ document.addEventListener('DOMContentLoaded', () => {
         interceptBadgeMethod.className = `method-badge ${req.method.toLowerCase()}`;
         interceptBadgeMethod.textContent = req.method;
         interceptUrlText.textContent = req.url;
+        
+        // Por defecto, resetear a la pestaña Formulario activa
+        interceptSubtabs.forEach(b => b.classList.remove('active'));
+        const formSubtab = document.querySelector('[data-subtab="intercept-structured"]');
+        if (formSubtab) formSubtab.classList.add('active');
+        interceptStructuredPane.style.display = 'flex';
+        interceptRawPane.style.display = 'none';
+
+        // Cargar en los campos del formulario
+        interceptMethod.value = req.method;
+        interceptUrl.value = req.url;
+        interceptBodyTextarea.value = req.body;
+        renderHeadersList(req.headers);
+
+        // Cargar en Raw
         interceptRawTextarea.value = req.raw;
     }
 
     function removeInterceptedRequest(id) {
+        const index = interceptedRequestsList.findIndex(r => r.id === id);
         interceptedRequestsList = interceptedRequestsList.filter(r => r.id !== id);
         
         if (currentInterceptedRequest && currentInterceptedRequest.id === id) {
-            currentInterceptedRequest = null;
+            if (interceptedRequestsList.length > 0) {
+                const nextIndex = Math.min(index, interceptedRequestsList.length - 1);
+                currentInterceptedRequest = interceptedRequestsList[nextIndex];
+            } else {
+                currentInterceptedRequest = null;
+            }
         }
 
         renderInterceptedRequests();
+
+        if (currentInterceptedRequest) {
+            selectInterceptedRequest(currentInterceptedRequest);
+        }
     }
 
     // Acción Forward
     interceptForwardBtn.addEventListener('click', async () => {
         if (!currentInterceptedRequest) return;
+        
+        // Asegurar que si está en Formulario, sincronizamos a Raw antes de enviar
+        const activeSubtab = document.querySelector('[data-subtab^="intercept-"].active');
+        if (activeSubtab && activeSubtab.getAttribute('data-subtab') === 'intercept-structured') {
+            syncFormToRaw();
+        }
         
         const modifiedRaw = interceptRawTextarea.value;
         const res = await fetch('/api/intercept/action', {

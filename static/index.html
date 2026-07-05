@@ -129,7 +129,14 @@
                         <h1>Interceptación en Tiempo Real</h1>
                         <p>Pausa las peticiones web, examínalas y edítalas antes de que salgan a internet.</p>
                     </div>
-                    <div class="header-actions">
+                    <div class="header-actions" style="display: flex; gap: 1.5rem; align-items: center;">
+                        <div class="toggle-container">
+                            <span class="toggle-label" id="intercept-ignore-static-text">Ignorar Estáticos</span>
+                            <label class="switch">
+                                <input type="checkbox" id="intercept-ignore-static-toggle" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
                         <div class="toggle-container">
                             <span class="toggle-label" id="intercept-status-text">Intercept OFF</span>
                             <label class="switch">
@@ -190,8 +197,64 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="editor-body-container" style="flex-grow: 1;">
-                                    <textarea id="intercept-raw-textarea" class="raw-editor" spellcheck="false"></textarea>
+                                <div class="editor-body-container" id="intercept-editor-body" style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+                                    <!-- Subpestañas del editor -->
+                                    <div class="tab-subheaders">
+                                        <button class="subtab-btn active" data-subtab="intercept-structured">Formulario</button>
+                                        <button class="subtab-btn" data-subtab="intercept-raw">Raw (HTTP)</button>
+                                    </div>
+                                    
+                                    <!-- Contenido de las subpestañas -->
+                                    <div style="flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; background-color: var(--bg-input);">
+                                        
+                                        <!-- Vista de Formulario (Estructurada) -->
+                                        <div id="intercept-structured-pane" style="flex-grow: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem;">
+                                            <!-- Fila de Método y URL -->
+                                            <div style="display: flex; gap: 0.75rem;">
+                                                <div style="flex: 0 0 120px;">
+                                                    <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">Método</label>
+                                                    <select id="intercept-method" class="select-method" style="width: 100%; height: 38px; padding: 0 0.5rem; background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text-main); font-weight: 600;">
+                                                        <option value="GET">GET</option>
+                                                        <option value="POST">POST</option>
+                                                        <option value="PUT">PUT</option>
+                                                        <option value="DELETE">DELETE</option>
+                                                        <option value="PATCH">PATCH</option>
+                                                        <option value="OPTIONS">OPTIONS</option>
+                                                        <option value="HEAD">HEAD</option>
+                                                    </select>
+                                                </div>
+                                                <div style="flex-grow: 1;">
+                                                    <label style="display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.5px;">URL / Ruta</label>
+                                                    <input type="text" id="intercept-url" style="width: 100%; height: 38px; padding: 0 0.75rem; background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; color: var(--text-main); font-family: var(--font-code); font-size: 0.85rem;" placeholder="/index.html">
+                                                </div>
+                                            </div>
+
+                                            <!-- Cabeceras (Headers) -->
+                                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem;">
+                                                    <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cabeceras (Headers)</label>
+                                                    <button type="button" id="intercept-add-header-btn" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.7rem; border-radius: 4px;">
+                                                        <i class="fa-solid fa-plus"></i> Añadir Cabecera
+                                                    </button>
+                                                </div>
+                                                <!-- Contenedor para la lista de cabeceras -->
+                                                <div id="intercept-headers-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 220px; overflow-y: auto; padding-right: 0.25rem;">
+                                                    <!-- Cabeceras clave-valor dinámicas -->
+                                                </div>
+                                            </div>
+
+                                            <!-- Cuerpo (Body) -->
+                                            <div style="display: flex; flex-direction: column; gap: 0.4rem; flex-grow: 1; min-height: 120px;">
+                                                <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Cuerpo (Body)</label>
+                                                <textarea id="intercept-body-textarea" class="raw-editor" style="flex-grow: 1; padding: 0.75rem; background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 6px; resize: vertical; min-height: 80px;" placeholder="Cuerpo de la petición..."></textarea>
+                                            </div>
+                                        </div>
+
+                                        <!-- Vista Raw -->
+                                        <div id="intercept-raw-pane" style="display: none; flex-grow: 1; height: 100%; padding: 1rem;">
+                                            <textarea id="intercept-raw-textarea" class="raw-editor" style="height: 100%;" spellcheck="false"></textarea>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -307,6 +370,17 @@
                             <li>En tu navegador configurado, visita un sitio HTTP simple como: <a href="http://httpbin.org" target="_blank" class="help-link">http://httpbin.org</a>.</li>
                             <li>Verás que la página queda cargando en el navegador, y aparecerá en la pestaña <strong>Interceptar</strong> de AetherProxy.</li>
                             <li>Modifica los headers o la ruta de la petición y presiona <strong>Forward</strong> para ver el efecto.</li>
+                        </ol>
+                    </div>
+
+                    <div class="help-card">
+                        <h2>4. Interceptar Tráfico Local (localhost / 127.0.0.1)</h2>
+                        <p>Por seguridad y rendimiento, los navegadores modernos <strong>evitan usar el proxy</strong> para conexiones dirigidas a <code>localhost</code> o <code>127.0.0.1</code> de manera predeterminada. Si estás desarrollando y quieres interceptar tu aplicación local:</p>
+                        <ol class="help-list" style="margin-top: 0.75rem;">
+                            <li>Abre Firefox y escribe <strong><code>about:config</code></strong> en la barra de direcciones.</li>
+                            <li>Busca la opción <strong><code>network.proxy.allow_hijacking_localhost</code></strong>.</li>
+                            <li>Haz doble clic sobre ella para cambiar su valor a <strong><code>true</code></strong>.</li>
+                            <li>Ve a Ajustes de Red en Firefox y asegúrate de <strong>eliminar</strong> <code>localhost</code> y <code>127.0.0.1</code> de la lista <strong>"No usar proxy para"</strong> (No proxy for).</li>
                         </ol>
                     </div>
                 </div>

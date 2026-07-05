@@ -862,3 +862,61 @@ input:checked + .slider:before {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* ==========================================================================
+   INTERCEPT HEADER EDITOR FORM STYLES
+   ========================================================================== */
+.intercept-header-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    width: 100%;
+}
+
+.intercept-header-row input {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 0.4rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: var(--font-code);
+    height: 32px;
+    transition: var(--transition-smooth);
+}
+
+.intercept-header-row input:focus {
+    border-color: var(--primary);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--primary-glow);
+}
+
+.intercept-header-row .header-key {
+    flex: 1;
+}
+
+.intercept-header-row .header-value {
+    flex: 2;
+}
+
+.intercept-header-row .btn-delete-header {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0.4rem;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-smooth);
+    border-radius: 4px;
+    height: 32px;
+    width: 32px;
+}
+
+.intercept-header-row .btn-delete-header:hover {
+    color: var(--danger);
+    background-color: rgba(239, 68, 68, 0.1);
+}
+
