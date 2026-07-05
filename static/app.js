@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentHistory = [];
     let selectedRequest = null;
     let currentInterceptedRequest = null;
+    let interceptedRequestsList = [];
 
     // Elementos DOM
     const navItems = document.querySelectorAll('.nav-item');
@@ -28,7 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const interceptStatusText = document.getElementById('intercept-status-text');
     const interceptBadge = document.getElementById('intercept-badge');
     const interceptEmpty = document.getElementById('intercept-empty');
-    const interceptActive = document.getElementById('intercept-active');
+    const interceptSplitView = document.getElementById('intercept-split-view');
+    const interceptRows = document.getElementById('intercept-rows');
+    const interceptEditorEmpty = document.getElementById('intercept-editor-empty');
+    const interceptEditorContent = document.getElementById('intercept-editor-content');
     const interceptBadgeMethod = document.getElementById('intercept-badge-method');
     const interceptUrlText = document.getElementById('intercept-url-text');
     const interceptRawTextarea = document.getElementById('intercept-raw-textarea');
@@ -134,6 +138,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentHistory = msg.history;
                     updateInterceptToggleUI(msg.intercept_enabled);
                     renderHistory();
+                    if (msg.pending_intercepts) {
+                        interceptedRequestsList = msg.pending_intercepts;
+                        renderInterceptedRequests();
+                    }
                     break;
                 
                 case 'new_request':
@@ -146,7 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
 
                 case 'intercept_request':
-                    handleInterceptedRequest(msg.request);
+                    interceptedRequestsList.push(msg.request);
+                    renderInterceptedRequests();
                     break;
 
                 case 'intercept_toggle_confirm':
@@ -326,8 +335,10 @@ document.addEventListener('DOMContentLoaded', () => {
             interceptStatusText.textContent = "Intercept OFF";
             interceptStatusText.style.color = "var(--text-muted)";
             
-            // Ocultar alerta de retención si se apaga en vivo
-            hideInterceptedRequestUI();
+            // Vaciar lista de peticiones en espera y refrescar UI
+            interceptedRequestsList = [];
+            currentInterceptedRequest = null;
+            renderInterceptedRequests();
         }
     }
 
@@ -340,29 +351,84 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    function handleInterceptedRequest(req) {
-        currentInterceptedRequest = req;
-        
-        // Alerta visual en la barra lateral
-        interceptBadge.style.display = 'inline-block';
-        interceptBadge.textContent = '1';
+    function renderInterceptedRequests() {
+        // Actualizar el badge del menú de navegación lateral
+        if (interceptedRequestsList.length > 0) {
+            interceptBadge.style.display = 'inline-block';
+            interceptBadge.textContent = interceptedRequestsList.length;
+        } else {
+            interceptBadge.style.display = 'none';
+        }
 
-        // Cambiar estado en pestaña Intercept
+        if (interceptedRequestsList.length === 0) {
+            interceptEmpty.style.display = 'flex';
+            interceptSplitView.style.display = 'none';
+            currentInterceptedRequest = null;
+            return;
+        }
+
         interceptEmpty.style.display = 'none';
-        interceptActive.style.display = 'flex';
+        interceptSplitView.style.display = 'flex';
 
-        // Cargar datos
+        // Renderizar filas en la tabla
+        interceptRows.innerHTML = '';
+        interceptedRequestsList.forEach((req) => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-id', req.id);
+            if (currentInterceptedRequest && currentInterceptedRequest.id === req.id) {
+                tr.classList.add('active');
+            }
+
+            const methodClass = req.method.toLowerCase();
+            const hostDisplay = req.headers['host'] || req.headers['Host'] || req.url;
+
+            tr.innerHTML = `
+                <td><span class="method-badge ${methodClass}">${req.method}</span></td>
+                <td class="url-text" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${hostDisplay}
+                </td>
+            `;
+
+            tr.addEventListener('click', () => {
+                interceptRows.querySelectorAll('tr').forEach(r => r.classList.remove('active'));
+                tr.classList.add('active');
+                selectInterceptedRequest(req);
+            });
+
+            interceptRows.appendChild(tr);
+        });
+
+        // Si se limpió la seleccionada o no hay ninguna seleccionada, ocultar editor
+        if (!currentInterceptedRequest) {
+            interceptEditorEmpty.style.display = 'flex';
+            interceptEditorContent.style.display = 'none';
+        } else {
+            // Asegurar que la fila seleccionada tenga clase active
+            const activeRow = interceptRows.querySelector(`tr[data-id="${currentInterceptedRequest.id}"]`);
+            if (activeRow) activeRow.classList.add('active');
+        }
+    }
+
+    function selectInterceptedRequest(req) {
+        currentInterceptedRequest = req;
+        interceptEditorEmpty.style.display = 'none';
+        interceptEditorContent.style.display = 'flex';
+
+        // Cargar datos en el editor
         interceptBadgeMethod.className = `method-badge ${req.method.toLowerCase()}`;
         interceptBadgeMethod.textContent = req.method;
         interceptUrlText.textContent = req.url;
         interceptRawTextarea.value = req.raw;
     }
 
-    function hideInterceptedRequestUI() {
-        currentInterceptedRequest = null;
-        interceptBadge.style.display = 'none';
-        interceptEmpty.style.display = 'flex';
-        interceptActive.style.display = 'none';
+    function removeInterceptedRequest(id) {
+        interceptedRequestsList = interceptedRequestsList.filter(r => r.id !== id);
+        
+        if (currentInterceptedRequest && currentInterceptedRequest.id === id) {
+            currentInterceptedRequest = null;
+        }
+
+        renderInterceptedRequests();
     }
 
     // Acción Forward
@@ -380,7 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
         });
         if (res.ok) {
-            hideInterceptedRequestUI();
+            removeInterceptedRequest(currentInterceptedRequest.id);
         }
     });
 
@@ -399,7 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 })
             });
             if (res.ok) {
-                hideInterceptedRequestUI();
+                removeInterceptedRequest(currentInterceptedRequest.id);
             }
         }
     });
