@@ -29,6 +29,7 @@ app.add_middleware(
 history: List[Dict[str, Any]] = []
 intercepted_requests: Dict[str, Dict[str, Any]] = {}
 intercept_enabled = False
+ignore_static_enabled = True
 
 # Gestor de conexiones WebSocket
 class ConnectionManager:
@@ -69,6 +70,7 @@ async def websocket_endpoint(websocket: WebSocket):
             "type": "init",
             "history": history,
             "intercept_enabled": intercept_enabled,
+            "ignore_static_enabled": ignore_static_enabled,
             "pending_intercepts": pending_list
         }))
         while True:
@@ -97,6 +99,17 @@ async def toggle_intercept(config: InterceptConfig):
                 req_info["event"].set()
                 
     return {"status": "ok", "intercept_enabled": intercept_enabled}
+
+class IgnoreStaticConfig(BaseModel):
+    enabled: bool
+
+@app.post("/api/intercept/ignore_static")
+async def toggle_ignore_static(config: IgnoreStaticConfig):
+    global ignore_static_enabled
+    ignore_static_enabled = config.enabled
+    logger.info(f"Ignorar estáticos cambiado a: {ignore_static_enabled}")
+    await manager.broadcast({"type": "ignore_static_toggle", "enabled": ignore_static_enabled})
+    return {"status": "ok", "ignore_static_enabled": ignore_static_enabled}
 
 class InterceptAction(BaseModel):
     id: str
@@ -292,8 +305,25 @@ async def handle_client(client_reader: asyncio.StreamReader, client_writer: asyn
         raw_req_headers = headers_part + b"\r\n\r\n"
         raw_req = raw_req_headers + body
 
+        # Determinar si se debe interceptar la petición
+        is_control_panel = (host in ["localhost", "127.0.0.1", "0.0.0.0"]) and port == 8000
+        is_websocket = headers_dict.get("upgrade", "").lower() == "websocket"
+        
+        should_intercept = intercept_enabled and not is_control_panel and not is_websocket
+        
+        if should_intercept and ignore_static_enabled:
+            # Descartar archivos estáticos comunes
+            path_part = url.split("?")[0]
+            static_extensions = (
+                ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".svg", 
+                ".ico", ".woff", ".woff2", ".ttf", ".eot", ".otf", 
+                ".map", ".json", ".xml"
+            )
+            if path_part.lower().endswith(static_extensions):
+                should_intercept = False
+
         # Interceptación
-        if intercept_enabled:
+        if should_intercept:
             req_id = str(uuid.uuid4())
             event = asyncio.Event()
             client_req = {
@@ -332,6 +362,8 @@ async def handle_client(client_reader: asyncio.StreamReader, client_writer: asyn
             
             # Usar la petición modificada
             raw_req = decision_info["modified_request"]
+            # Normalizar saltos de línea (el textarea del navegador suele enviar \n)
+            raw_req = raw_req.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
             # Re-parsear el host y path por si cambiaron en la edición manual
             parts = raw_req.split(b"\r\n\r\n", 1)
             headers_part = parts[0]
@@ -375,8 +407,19 @@ async def handle_client(client_reader: asyncio.StreamReader, client_writer: asyn
         else:
             path = url
 
+        # Reconstruir las cabeceras forzando Connection: close para evitar bloqueos por Keep-Alive
+        header_lines = []
+        for line in headers_part.split(b"\r\n")[1:]:
+            if b":" in line:
+                k_bytes, v_bytes = line.split(b":", 1)
+                k_str = k_bytes.decode('utf-8', errors='ignore').strip().lower()
+                if k_str in ["connection", "proxy-connection"]:
+                    continue
+                header_lines.append(line)
+        header_lines.append(b"Connection: close")
+        
         new_first_line = f"{method} {path} HTTP/1.1\r\n".encode('utf-8')
-        new_headers = new_first_line + b"\r\n".join(headers_part.split(b"\r\n")[1:]) + b"\r\n\r\n"
+        new_headers = new_first_line + b"\r\n".join(header_lines) + b"\r\n\r\n"
         
         target_writer.write(new_headers + body)
         await target_writer.drain()
