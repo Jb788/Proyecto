@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AetherProxy - Intercepting Web Proxy</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome para iconos -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Estilos -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Barra Lateral de Navegación -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-circle-nodes logo-icon"></i>
+                <div class="logo-text">
+                    <span class="logo-title">Aether</span>
+                    <span class="logo-subtitle">PROXY</span>
+                </div>
+            </div>
+            <nav class="nav-menu">
+                <button class="nav-item active" data-tab="history">
+                    <i class="fa-solid fa-list-ul"></i>
+                    <span>Historial</span>
+                </button>
+                <button class="nav-item" data-tab="intercept">
+                    <i class="fa-solid fa-hand"></i>
+                    <span>Interceptar</span>
+                    <span class="badge" id="intercept-badge" style="display: none;">1</span>
+                </button>
+                <button class="nav-item" data-tab="repeater">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Repeater</span>
+                </button>
+                <button class="nav-item" data-tab="help">
+                    <i class="fa-solid fa-circle-question"></i>
+                    <span>Ayuda</span>
+                </button>
+            </nav>
+            <div class="sidebar-status">
+                <div class="status-item">
+                    <span class="status-dot green"></span>
+                    <span>Proxy: 127.0.0.1:8080</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-dot green"></span>
+                    <span>API: 127.0.0.1:8000</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Contenedor Principal -->
+        <main class="main-content">
+            <!-- Pestaña de Historial -->
+            <section id="tab-history" class="tab-pane active">
+                <header class="tab-header">
+                    <div class="header-info">
+                        <h1>Historial del Proxy</h1>
+                        <p>Tránsito de peticiones en tiempo real capturado por AetherProxy.</p>
+                    </div>
+                    <div class="header-actions">
+                        <button id="clear-history-btn" class="btn btn-secondary">
+                            <i class="fa-solid fa-trash-can"></i> Limpiar Historial
+                        </button>
+                    </div>
+                </header>
+                
+                <div class="split-view">
+                    <!-- Tabla de Peticiones -->
+                    <div class="table-container">
+                        <table class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Método</th>
+                                    <th>URL</th>
+                                    <th>Estado</th>
+                                    <th>Host</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-rows">
+                                <!-- Filas dinámicas -->
+                                <tr class="empty-state">
+                                    <td colspan="5">
+                                        <div class="empty-icon"><i class="fa-solid fa-ethernet"></i></div>
+                                        <p>Esperando tráfico... Configura tu navegador para usar el proxy (puerto 8080).</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Detalle de Petición Seleccionada -->
+                    <div class="detail-panel" id="detail-panel">
+                        <div class="detail-empty">
+                            <i class="fa-solid fa-arrow-left"></i>
+                            <p>Selecciona una petición del historial para ver el detalle</p>
+                        </div>
+                        <div class="detail-content" style="display: none;">
+                            <div class="detail-tabs">
+                                <button class="detail-tab-btn active" data-detail-tab="req-headers">Headers Petición</button>
+                                <button class="detail-tab-btn" data-detail-tab="req-body">Cuerpo Petición</button>
+                                <button class="detail-tab-btn" data-detail-tab="res-headers">Headers Respuesta</button>
+                                <button class="detail-tab-btn" data-detail-tab="res-body">Cuerpo Respuesta</button>
+                            </div>
+                            <div class="detail-viewer">
+                                <pre id="detail-text" class="code-block"></pre>
+                            </div>
+                            <div class="detail-actions">
+                                <button id="send-to-repeater-btn" class="btn btn-primary btn-sm">
+                                    <i class="fa-solid fa-share-from-square"></i> Enviar a Repeater
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pestaña de Interceptación -->
+            <section id="tab-intercept" class="tab-pane">
+                <header class="tab-header">
+                    <div class="header-info">
+                        <h1>Interceptación en Tiempo Real</h1>
+                        <p>Pausa las peticiones web, examínalas y edítalas antes de que salgan a internet.</p>
+                    </div>
+                    <div class="header-actions">
+                        <div class="toggle-container">
+                            <span class="toggle-label" id="intercept-status-text">Intercept OFF</span>
+                            <label class="switch">
+                                <input type="checkbox" id="intercept-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                    </div>
+                </header>
+
+                <div class="intercept-container">
+                    <!-- Vista cuando no hay peticiones retenidas -->
+                    <div class="intercept-empty-state" id="intercept-empty">
+                        <div class="empty-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                        <h3 id="intercept-msg-title">El Interceptador está inactivo</h3>
+                        <p id="intercept-msg-desc">Activa el switch de arriba y realiza una petición HTTP a través del proxy.</p>
+                    </div>
+
+                    <!-- Vista con petición retenida -->
+                    <div class="intercept-active-editor" id="intercept-active" style="display: none;">
+                        <div class="intercept-alert">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>Petición retenida en el puerto 8080. Edítala libremente a continuación.</span>
+                        </div>
+                        <div class="editor-header">
+                            <div class="editor-title">
+                                <span class="method-badge" id="intercept-badge-method">GET</span>
+                                <span class="url-text" id="intercept-url-text">http://example.com/</span>
+                            </div>
+                            <div class="editor-actions-top">
+                                <button id="intercept-forward-btn" class="btn btn-success">
+                                    <i class="fa-solid fa-play"></i> Forward
+                                </button>
+                                <button id="intercept-drop-btn" class="btn btn-danger">
+                                    <i class="fa-solid fa-ban"></i> Drop
+                                </button>
+                            </div>
+                        </div>
+                        <div class="editor-body-container">
+                            <textarea id="intercept-raw-textarea" class="raw-editor" spellcheck="false"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pestaña de Repeater -->
+            <section id="tab-repeater" class="tab-pane">
+                <header class="tab-header">
+                    <div class="header-info">
+                        <h1>Repetidor de Peticiones</h1>
+                        <p>Construye peticiones a medida, modifícalas y repítelas para analizar respuestas.</p>
+                    </div>
+                </header>
+
+                <div class="repeater-container">
+                    <!-- Configuración rápida de URL -->
+                    <div class="repeater-url-bar">
+                        <select id="repeater-method" class="select-method">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="OPTIONS">OPTIONS</option>
+                        </select>
+                        <input type="text" id="repeater-url" class="input-url" placeholder="https://httpbin.org/get">
+                        <button id="repeater-send-btn" class="btn btn-primary">
+                            <i class="fa-solid fa-paper-plane"></i> Enviar
+                        </button>
+                    </div>
+
+                    <!-- Panel de doble columna -->
+                    <div class="repeater-panels">
+                        <!-- Columna Izquierda: Petición (Editable) -->
+                        <div class="repeater-column">
+                            <div class="column-header">
+                                <h3>Headers y Cuerpo (Formato JSON para Headers)</h3>
+                            </div>
+                            <div class="repeater-editor-section">
+                                <div class="tab-subheaders">
+                                    <button class="subtab-btn active" data-subtab="rep-headers">Headers (JSON)</button>
+                                    <button class="subtab-btn" data-subtab="rep-body">Cuerpo (Raw)</button>
+                                </div>
+                                <div class="subtab-content">
+                                    <textarea id="repeater-headers-textarea" class="raw-editor" spellcheck="false" placeholder='{\n  "User-Agent": "AetherProxy/1.0",\n  "Accept": "*/*"\n}'></textarea>
+                                    <textarea id="repeater-body-textarea" class="raw-editor" style="display: none;" spellcheck="false" placeholder="Escribe el cuerpo de tu petición aquí (si aplica)..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Columna Derecha: Respuesta (Solo Lectura) -->
+                        <div class="repeater-column">
+                            <div class="column-header">
+                                <h3>Respuesta del Servidor</h3>
+                                <span class="status-badge" id="repeater-res-status" style="display: none;">200 OK</span>
+                            </div>
+                            <div class="repeater-editor-section">
+                                <div class="tab-subheaders">
+                                    <button class="subtab-btn active" data-subtab="rep-res-headers">Headers</button>
+                                    <button class="subtab-btn" data-subtab="rep-res-body">Cuerpo</button>
+                                </div>
+                                <div class="subtab-content">
+                                    <pre id="repeater-res-headers" class="code-block"></pre>
+                                    <pre id="repeater-res-body" class="code-block" style="display: none;"></pre>
+                                    <div class="repeater-loader" id="repeater-loader" style="display: none;">
+                                        <div class="spinner"></div>
+                                        <p>Enviando petición...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Pestaña de Ayuda -->
+            <section id="tab-help" class="tab-pane">
+                <header class="tab-header">
+                    <div class="header-info">
+                        <h1>Guía de Inicio Rápido</h1>
+                        <p>Aprende a configurar tu navegador para interceptar tráfico con AetherProxy.</p>
+                    </div>
+                </header>
+
+                <div class="help-content">
+                    <div class="help-card">
+                        <h2>1. ¿Cómo funciona AetherProxy?</h2>
+                        <p>AetherProxy actúa como un "intermediario" o Proxy local. Cuando tu navegador realiza una petición web (HTTP), esta pasa primero por AetherProxy. Si la interceptación está activa, la petición se detiene aquí y puedes modificarla antes de dejarla seguir su camino.</p>
+                    </div>
+
+                    <div class="help-card">
+                        <h2>2. Configurar tu Navegador (Firefox Recomendado)</h2>
+                        <ol class="help-list">
+                            <li>Abre <strong>Firefox</strong> y ve a <strong>Ajustes / Ajustes de Red</strong> (al final de la página General).</li>
+                            <li>Haz clic en <strong>Configuración...</strong></li>
+                            <li>Selecciona <strong>Configuración manual de proxy</strong>.</li>
+                            <li>Ingresa en <strong>Proxy HTTP</strong>: <code>127.0.0.1</code> y en <strong>Puerto</strong>: <code>8080</code>.</li>
+                            <li>Marca la opción <strong>"Usar este proxy para HTTPS también"</strong>.</li>
+                            <li>Haz clic en <strong>Aceptar</strong>.</li>
+                        </ol>
+                        <div class="help-note">
+                            <i class="fa-solid fa-lightbulb"></i>
+                            <span><strong>Nota:</strong> Como este es un proxy de aprendizaje sencillo, las conexiones HTTPS se tunelizarán de forma segura (pasante) sin ser leídas por seguridad. Para interactuar con HTTPS libremente sin alertas SSL, utiliza la pestaña de <strong>Repeater</strong>.</span>
+                        </div>
+                    </div>
+
+                    <div class="help-card">
+                        <h2>3. Probando la Interceptación HTTP</h2>
+                        <ol class="help-list">
+                            <li>Activa el interruptor en la pestaña <strong>Interceptar</strong>.</li>
+                            <li>En tu navegador configurado, visita un sitio HTTP simple como: <a href="http://httpbin.org" target="_blank" class="help-link">http://httpbin.org</a>.</li>
+                            <li>Verás que la página queda cargando en el navegador, y aparecerá en la pestaña <strong>Interceptar</strong> de AetherProxy.</li>
+                            <li>Modifica los headers o la ruta de la petición y presiona <strong>Forward</strong> para ver el efecto.</li>
+                        </ol>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
