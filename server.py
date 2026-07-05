@@ -60,10 +60,16 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         # Enviar historial actual al conectar
+        pending_list = [
+            info["client_req"]
+            for info in intercepted_requests.values()
+            if info["decision"] is None and "client_req" in info
+        ]
         await websocket.send_text(json.dumps({
             "type": "init",
             "history": history,
-            "intercept_enabled": intercept_enabled
+            "intercept_enabled": intercept_enabled,
+            "pending_intercepts": pending_list
         }))
         while True:
             # Mantener la conexión abierta
@@ -81,6 +87,15 @@ async def toggle_intercept(config: InterceptConfig):
     intercept_enabled = config.enabled
     logger.info(f"Interceptación cambiada a: {intercept_enabled}")
     await manager.broadcast({"type": "intercept_toggle", "enabled": intercept_enabled})
+    
+    # Si se desactiva, liberar todas las peticiones en espera
+    if not intercept_enabled:
+        for req_info in list(intercepted_requests.values()):
+            if req_info["decision"] is None:
+                req_info["decision"] = "forward"
+                req_info["modified_request"] = req_info["raw_request"]
+                req_info["event"].set()
+                
     return {"status": "ok", "intercept_enabled": intercept_enabled}
 
 class InterceptAction(BaseModel):
@@ -281,31 +296,35 @@ async def handle_client(client_reader: asyncio.StreamReader, client_writer: asyn
         if intercept_enabled:
             req_id = str(uuid.uuid4())
             event = asyncio.Event()
+            client_req = {
+                "id": req_id,
+                "method": method,
+                "url": url,
+                "headers": headers_dict,
+                "body": body.decode('utf-8', errors='ignore'),
+                "raw": raw_req.decode('utf-8', errors='ignore')
+            }
             intercepted_requests[req_id] = {
                 "id": req_id,
                 "raw_request": raw_req,
                 "event": event,
                 "decision": None,
-                "modified_request": None
+                "modified_request": None,
+                "client_req": client_req
             }
 
             # Enviar detalles al frontend
             await manager.broadcast({
                 "type": "intercept_request",
-                "request": {
-                    "id": req_id,
-                    "method": method,
-                    "url": url,
-                    "headers": headers_dict,
-                    "body": body.decode('utf-8', errors='ignore'),
-                    "raw": raw_req.decode('utf-8', errors='ignore')
-                }
+                "request": client_req
             })
 
             # Esperar a que el usuario decida (Forward o Drop)
-            await event.wait()
+            try:
+                await event.wait()
+            finally:
+                decision_info = intercepted_requests.pop(req_id, None)
 
-            decision_info = intercepted_requests.get(req_id)
             if not decision_info or decision_info["decision"] == "drop":
                 logger.info(f"Petición {req_id} descartada (Dropped) por el usuario.")
                 client_writer.close()
