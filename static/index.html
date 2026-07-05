@@ -140,7 +140,7 @@
                     </div>
                 </header>
 
-                <div class="intercept-container">
+                <div class="intercept-container" style="flex-grow: 1; display: flex; flex-direction: column;">
                     <!-- Vista cuando no hay peticiones retenidas -->
                     <div class="intercept-empty-state" id="intercept-empty">
                         <div class="empty-icon"><i class="fa-solid fa-shield-halved"></i></div>
@@ -148,28 +148,52 @@
                         <p id="intercept-msg-desc">Activa el switch de arriba y realiza una petición HTTP a través del proxy.</p>
                     </div>
 
-                    <!-- Vista con petición retenida -->
-                    <div class="intercept-active-editor" id="intercept-active" style="display: none;">
-                        <div class="intercept-alert">
-                            <i class="fa-solid fa-triangle-exclamation"></i>
-                            <span>Petición retenida en el puerto 8080. Edítala libremente a continuación.</span>
+                    <!-- Vista con peticiones retenidas (Split View) -->
+                    <div class="split-view" id="intercept-split-view" style="display: none; width: 100%; height: 100%;">
+                        <!-- Lista de Peticiones Interceptadas (Pausadas) -->
+                        <div class="table-container" style="flex: 1; border-right: 1px solid var(--border); overflow-y: auto;">
+                            <table class="history-table">
+                                <thead>
+                                    <tr>
+                                        <th>Método</th>
+                                        <th>Host / URL</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="intercept-rows">
+                                    <!-- Filas de peticiones interceptadas -->
+                                </tbody>
+                            </table>
                         </div>
-                        <div class="editor-header">
-                            <div class="editor-title">
-                                <span class="method-badge" id="intercept-badge-method">GET</span>
-                                <span class="url-text" id="intercept-url-text">http://example.com/</span>
+
+                        <!-- Editor de Petición Seleccionada -->
+                        <div class="detail-panel" id="intercept-editor-panel" style="flex: 2;">
+                            <div class="detail-empty" id="intercept-editor-empty">
+                                <i class="fa-solid fa-arrow-left"></i>
+                                <p>Selecciona una petición interceptada de la lista para editarla</p>
                             </div>
-                            <div class="editor-actions-top">
-                                <button id="intercept-forward-btn" class="btn btn-success">
-                                    <i class="fa-solid fa-play"></i> Forward
-                                </button>
-                                <button id="intercept-drop-btn" class="btn btn-danger">
-                                    <i class="fa-solid fa-ban"></i> Drop
-                                </button>
+                            <div class="detail-content" id="intercept-editor-content" style="display: none; flex-direction: column; height: 100%;">
+                                <div class="intercept-alert">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                    <span>Petición retenida en el puerto 8080. Edítala libremente a continuación.</span>
+                                </div>
+                                <div class="editor-header">
+                                    <div class="editor-title">
+                                        <span class="method-badge" id="intercept-badge-method">GET</span>
+                                        <span class="url-text" id="intercept-url-text">http://example.com/</span>
+                                    </div>
+                                    <div class="editor-actions-top">
+                                        <button id="intercept-forward-btn" class="btn btn-success">
+                                            <i class="fa-solid fa-play"></i> Forward
+                                        </button>
+                                        <button id="intercept-drop-btn" class="btn btn-danger">
+                                            <i class="fa-solid fa-ban"></i> Drop
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="editor-body-container" style="flex-grow: 1;">
+                                    <textarea id="intercept-raw-textarea" class="raw-editor" spellcheck="false"></textarea>
+                                </div>
                             </div>
-                        </div>
-                        <div class="editor-body-container">
-                            <textarea id="intercept-raw-textarea" class="raw-editor" spellcheck="false"></textarea>
                         </div>
                     </div>
                 </div>
